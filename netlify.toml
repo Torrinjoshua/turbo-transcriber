@@ -1,0 +1,11 @@
+[build]
+  command = "next build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = []
+  external_node_modules = ["openai"]

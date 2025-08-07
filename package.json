@@ -1,0 +1,21 @@
+{
+  "name": "turbo-transcriber",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "form-data": "^4.0.0",
+    "next": "14.2.5",
+    "openai": "^4.57.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "server-timing-header": "^1.0.3",
+    "yt-dlp-exec": "^2.4.7",
+    "zod": "^3.23.8"
+  }
+}

@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: turbo-transcriber
+    env: docker
+    autoDeploy: true
+    plan: starter
+    healthCheckPath: /
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TRANSCRIBE_MODEL
+        value: gpt-4o-transcribe
+      - key: MAX_UPLOAD_MB
+        value: 100
