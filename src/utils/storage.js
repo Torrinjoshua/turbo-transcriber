@@ -145,6 +145,25 @@ export function recordAccuracy(lessonId, correct, total) {
   saveProgress(p)
 }
 
+export function saveLessonStars(lessonId, stars) {
+  const p = getProgress()
+  p.lessonStars = p.lessonStars || {}
+  if ((p.lessonStars[lessonId] || 0) < stars) {
+    p.lessonStars[lessonId] = stars
+  }
+  saveProgress(p)
+}
+
+export function getLessonStars(lessonId) {
+  const p = getProgress()
+  return (p.lessonStars || {})[lessonId] || 0
+}
+
+export function getAllLessonStars() {
+  const p = getProgress()
+  return p.lessonStars || {}
+}
+
 function todayString() {
   return new Date().toISOString().slice(0, 10)
 }

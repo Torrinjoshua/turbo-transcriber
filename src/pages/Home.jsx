@@ -1,17 +1,8 @@
 import { useNavigate } from 'react-router-dom'
-import { getProfile, getProgress, getDeck } from '../utils/storage.js'
-import { getLevel, getProgressToNextLevel } from '../utils/xp.js'
+import { getProfile, getProgress, getDeck, getAllLessonStars } from '../utils/storage.js'
+import { getLevel } from '../utils/xp.js'
 import { getDueCards } from '../utils/srs.js'
 import { LESSONS } from '../data/lessons.js'
-
-const GREETINGS = ['Mwaiseni', 'Muli shani?', 'Icalo!', 'Pangeni!']
-
-function getGreeting() {
-  const hour = new Date().getHours()
-  if (hour < 12) return 'Good morning'
-  if (hour < 17) return 'Good afternoon'
-  return 'Good evening'
-}
 
 export default function Home() {
   const navigate = useNavigate()
@@ -19,175 +10,144 @@ export default function Home() {
   const progress = getProgress()
   const deck = getDeck()
   const dueCards = getDueCards(deck)
+  const lessonStars = getAllLessonStars()
   const level = getLevel(progress.xp || 0)
-  const levelProgress = getProgressToNextLevel(progress.xp || 0)
   const completedLessons = progress.lessonsCompleted || []
-  const totalWords = LESSONS.reduce((sum, l) => sum + l.vocabulary.length, 0)
-  const learnedWords = Object.keys(deck).length
 
-  const bembaGreeting = GREETINGS[new Date().getDay() % GREETINGS.length]
+  const firstIncomplete = LESSONS.findIndex(
+    (l, i) => !completedLessons.includes(l.id) && (i === 0 || completedLessons.includes(LESSONS[i - 1].id))
+  )
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header greeting */}
-      <div className="bg-forest-600 text-cream rounded-2xl px-6 py-6 relative overflow-hidden">
-        <div
-          className="absolute inset-0 opacity-10"
-          style={{
-            backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.3) 10px, rgba(255,255,255,0.3) 11px)`,
-          }}
-        />
-        <p className="text-forest-200 text-sm font-medium mb-1 relative">{getGreeting()}</p>
-        <h1 className="font-serif text-2xl font-bold relative">{profile.name}</h1>
-        <p className="text-forest-200 text-sm mt-1 italic relative">{bembaGreeting}</p>
+    <div className="flex flex-col min-h-dvh bg-cream">
+      {/* Top bar */}
+      <div className="bg-white px-5 pt-12 pb-4 shadow-sm sticky top-0 z-10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{profile.avatar || '🦁'}</span>
+            <div>
+              <p className="font-bold text-ink text-base leading-tight">{profile.name}</p>
+              <p className="text-xs text-terracotta-500 font-semibold">{level.name}</p>
+            </div>
+          </div>
 
-        {/* Stats row */}
-        <div className="flex gap-4 mt-5 relative">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gold-400">{progress.streak || 0}</div>
-            <div className="text-xs text-forest-300">day streak</div>
-          </div>
-          <div className="w-px bg-forest-500" />
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gold-400">{progress.xp || 0}</div>
-            <div className="text-xs text-forest-300">XP total</div>
-          </div>
-          <div className="w-px bg-forest-500" />
-          <div className="text-center">
-            <div className="text-2xl font-bold text-gold-400">{dueCards.length}</div>
-            <div className="text-xs text-forest-300">cards due</div>
+          {/* Stats pills */}
+          <div className="flex gap-2">
+            <StatPill icon="🔥" value={progress.streak || 0} label="streak" />
+            <StatPill icon="⭐" value={progress.xp || 0} label="XP" />
           </div>
         </div>
-      </div>
 
-      {/* Level badge */}
-      <div className="bg-white/70 border border-gold-500/30 rounded-2xl p-5">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <span className="text-xs text-gold-600 font-semibold uppercase tracking-wider">Current Level</span>
-            <h2 className="font-serif text-xl text-ink mt-0.5">{level.name}</h2>
-            <p className="text-xs text-ink/50">{level.subtitle}</p>
-          </div>
-          <div className="text-4xl">🏅</div>
-        </div>
-        <div className="bg-cream rounded-full h-2.5 overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-gold-500 to-gold-400 rounded-full transition-all duration-500"
-            style={{ width: `${levelProgress}%` }}
-          />
-        </div>
-        <p className="text-xs text-ink/40 mt-1.5">{levelProgress}% to next level</p>
-      </div>
-
-      {/* Quick actions */}
-      <div>
-        <h2 className="font-serif text-lg text-ink mb-3">Study now</h2>
-        <div className="grid grid-cols-2 gap-3">
-          <QuickAction
-            icon="📚"
-            title="Start Lesson"
-            subtitle={`${completedLessons.length}/${LESSONS.length} done`}
-            color="bg-terracotta-500"
-            onClick={() => navigate('/lessons')}
-          />
-          <QuickAction
-            icon="🃏"
-            title="Flashcards"
-            subtitle={`${dueCards.length} due today`}
-            color="bg-forest-600"
+        {/* Due cards banner */}
+        {dueCards.length > 0 && (
+          <button
             onClick={() => navigate('/practice')}
-            badge={dueCards.length > 0 ? dueCards.length : null}
-          />
-          <QuickAction
-            icon="🧠"
-            title="Take a Quiz"
-            subtitle="Test your knowledge"
-            color="bg-gold-500"
-            textColor="text-ink"
-            onClick={() => navigate('/quiz')}
-          />
-          <QuickAction
-            icon="🫶"
-            title="Couples Mode"
-            subtitle="Study together"
-            color="bg-terracotta-200"
-            textColor="text-terracotta-800"
-            onClick={() => navigate('/couples')}
-          />
-        </div>
+            className="mt-3 w-full bg-terracotta-50 border-2 border-terracotta-300 rounded-2xl px-4 py-2.5 flex items-center gap-3 active:scale-95 transition-transform"
+          >
+            <span className="text-xl">🃏</span>
+            <div className="text-left flex-1">
+              <p className="text-terracotta-700 font-bold text-sm">
+                {dueCards.length} card{dueCards.length !== 1 ? 's' : ''} ready to review!
+              </p>
+            </div>
+            <span className="bg-terracotta-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
+              Go
+            </span>
+          </button>
+        )}
       </div>
 
-      {/* Vocabulary progress */}
-      <div className="bg-white/70 border border-terracotta-100 rounded-2xl p-5">
-        <div className="flex justify-between items-baseline mb-3">
-          <h2 className="font-serif text-lg text-ink">Vocabulary</h2>
-          <span className="text-sm text-ink/50">{learnedWords} / {totalWords} words</span>
-        </div>
-        <div className="bg-cream rounded-full h-3 overflow-hidden">
+      {/* Lesson path */}
+      <div className="flex-1 overflow-y-auto px-6 py-6">
+        <h2 className="font-serif text-xl text-ink font-bold mb-6 text-center">Your Learning Path</h2>
+
+        <div className="relative">
+          {/* Vertical connecting line */}
           <div
-            className="h-full bg-terracotta-400 rounded-full transition-all duration-500"
-            style={{ width: totalWords > 0 ? `${Math.round((learnedWords / totalWords) * 100)}%` : '0%' }}
+            className="absolute left-1/2 top-10 bottom-10 w-1 -translate-x-1/2 rounded-full"
+            style={{ background: 'repeating-linear-gradient(to bottom, #d1c4b0 0px, #d1c4b0 8px, transparent 8px, transparent 14px)' }}
           />
-        </div>
-        <p className="text-xs text-ink/40 mt-1.5">
-          {totalWords > 0 ? Math.round((learnedWords / totalWords) * 100) : 0}% of all vocabulary in your deck
-        </p>
-      </div>
 
-      {/* Lesson map */}
-      <div>
-        <h2 className="font-serif text-lg text-ink mb-3">Lessons</h2>
-        <div className="space-y-2">
-          {LESSONS.map((lesson, idx) => {
-            const isComplete = completedLessons.includes(lesson.id)
-            const isLocked = idx > 0 && !completedLessons.includes(LESSONS[idx - 1].id)
-            return (
-              <button
-                key={lesson.id}
-                onClick={() => !isLocked && navigate(`/lessons/${lesson.id}`)}
-                disabled={isLocked}
-                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl border transition-all text-left ${
-                  isLocked
-                    ? 'border-ink/10 bg-cream/50 opacity-40 cursor-not-allowed'
-                    : isComplete
-                    ? 'border-forest-200 bg-forest-50 hover:bg-forest-100'
-                    : 'border-terracotta-200 bg-white/80 hover:bg-terracotta-50'
-                }`}
-              >
-                <span className="text-2xl">{isLocked ? '🔒' : lesson.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium truncate ${isLocked ? 'text-ink/40' : 'text-ink'}`}>
-                    {lesson.title}
-                  </p>
-                  <p className="text-xs text-ink/40">{lesson.vocabulary.length} words</p>
+          <div className="space-y-4 relative">
+            {LESSONS.map((lesson, idx) => {
+              const isComplete = completedLessons.includes(lesson.id)
+              const isLocked = idx > 0 && !completedLessons.includes(LESSONS[idx - 1].id)
+              const isCurrent = idx === firstIncomplete
+              const stars = lessonStars[lesson.id] || 0
+
+              // Alternating left/right offset
+              const offset = idx % 2 === 0 ? '-translate-x-6' : 'translate-x-6'
+
+              return (
+                <div key={lesson.id} className={`flex flex-col items-center transform ${offset}`}>
+                  {/* Lesson circle */}
+                  <button
+                    onClick={() => !isLocked && navigate(`/lessons/${lesson.id}`)}
+                    disabled={isLocked}
+                    className={`
+                      relative w-20 h-20 rounded-full flex flex-col items-center justify-center
+                      shadow-lg transition-all active:scale-90 select-none
+                      ${isComplete
+                        ? 'bg-forest-600 text-white shadow-forest-200'
+                        : isCurrent
+                        ? 'bg-terracotta-500 text-white animate-pulse-ring'
+                        : isLocked
+                        ? 'bg-gray-200 text-gray-400'
+                        : 'bg-terracotta-400 text-white'}
+                    `}
+                  >
+                    <span className="text-3xl">{isLocked ? '🔒' : lesson.icon}</span>
+                  </button>
+
+                  {/* Stars */}
+                  {isComplete && (
+                    <div className="flex gap-0.5 mt-1.5 animate-bounce-in">
+                      {[1, 2, 3].map(s => (
+                        <span key={s} className={`text-base ${s <= stars ? 'text-gold-500' : 'text-gray-300'}`}>
+                          ★
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Label */}
+                  {!isLocked && (
+                    <p className={`text-xs font-bold mt-1 text-center max-w-[90px] leading-tight ${
+                      isComplete ? 'text-forest-600' : isCurrent ? 'text-terracotta-600' : 'text-ink/50'
+                    }`}>
+                      {lesson.title}
+                    </p>
+                  )}
+
+                  {/* "Start here" badge */}
+                  {isCurrent && (
+                    <div className="mt-1.5 bg-terracotta-500 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full">
+                      START HERE
+                    </div>
+                  )}
                 </div>
-                {isComplete && <span className="text-forest-500 text-sm font-semibold">✓</span>}
-                {!isComplete && !isLocked && (
-                  <span className="text-terracotta-400 text-sm">→</span>
-                )}
-              </button>
-            )
-          })}
+              )
+            })}
+
+            {/* End of path */}
+            <div className="flex flex-col items-center py-4">
+              <div className="w-16 h-16 rounded-full bg-gold-400/20 border-2 border-gold-400 flex items-center justify-center text-3xl">
+                🏆
+              </div>
+              <p className="text-xs font-bold text-gold-600 mt-1.5">Mulopwe!</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-function QuickAction({ icon, title, subtitle, color, textColor = 'text-cream', onClick, badge }) {
+function StatPill({ icon, value, label }) {
   return (
-    <button
-      onClick={onClick}
-      className={`${color} ${textColor} relative rounded-2xl p-4 text-left transition-transform active:scale-95 shadow-sm`}
-    >
-      {badge != null && badge > 0 && (
-        <span className="absolute top-2 right-2 bg-cream text-terracotta-500 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-          {badge}
-        </span>
-      )}
-      <div className="text-2xl mb-2">{icon}</div>
-      <div className="font-semibold text-sm leading-tight">{title}</div>
-      <div className="text-xs opacity-75 mt-0.5">{subtitle}</div>
-    </button>
+    <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5">
+      <span className="text-base">{icon}</span>
+      <span className="font-bold text-ink text-sm">{value}</span>
+    </div>
   )
 }

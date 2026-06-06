@@ -4,34 +4,26 @@ import { getDueCards, rateCard, getNextReviewTime, RATINGS } from '../utils/srs.
 import { getAllVocabulary } from '../data/lessons.js'
 import { XP_REWARDS } from '../utils/xp.js'
 
-const RATING_CONFIG = [
-  { key: RATINGS.AGAIN, label: 'Again', emoji: '🔁', color: 'border-terracotta-400 text-terracotta-600 hover:bg-terracotta-50' },
-  { key: RATINGS.HARD, label: 'Hard', emoji: '😓', color: 'border-orange-400 text-orange-600 hover:bg-orange-50' },
-  { key: RATINGS.GOOD, label: 'Good', emoji: '👍', color: 'border-forest-400 text-forest-600 hover:bg-forest-50' },
-  { key: RATINGS.EASY, label: 'Easy', emoji: '⚡', color: 'border-gold-500 text-gold-600 hover:bg-gold-50' },
-]
+const CORRECT_MSG = ['Amazing! 🌟', 'You got it! 💪', 'Mwabombeni! 🎉', 'Superstar! ⭐', 'Brilliant! ✨']
+const rand = arr => arr[Math.floor(Math.random() * arr.length)]
 
 export default function Practice() {
-  const allVocab = useMemo(() => getAllVocabulary(), [])
-  const vocabMap = useMemo(() => Object.fromEntries(allVocab.map((v) => [v.id, v])), [allVocab])
+  const allVocab  = useMemo(() => getAllVocabulary(), [])
+  const vocabMap  = useMemo(() => Object.fromEntries(allVocab.map(v => [v.id, v])), [allVocab])
 
-  const [deck, setDeck] = useState(() => getDeck())
-  const [sessionCards, setSessionCards] = useState(() => {
-    const due = getDueCards(getDeck())
-    return shuffle([...due])
-  })
-  const [currentIdx, setCurrentIdx] = useState(0)
-  const [flipped, setFlipped] = useState(false)
-  const [showBemba, setShowBemba] = useState(true)
-  const [sessionDone, setSessionDone] = useState(0)
-  const [sessionCorrect, setSessionCorrect] = useState(0)
+  const [deck, setDeck]         = useState(() => getDeck())
+  const [queue]                 = useState(() => shuffle([...getDueCards(getDeck())]))
+  const [idx, setIdx]           = useState(0)
+  const [flipped, setFlipped]   = useState(false)
+  const [sessionGood, setGood]  = useState(0)
+  const [done, setDone]         = useState(false)
 
-  const totalDue = sessionCards.length
-  const currentCard = sessionCards[currentIdx]
-  const vocab = currentCard ? vocabMap[currentCard.vocabularyId] : null
+  const totalDue = queue.length
+  const card     = queue[idx]
+  const vocab    = card ? vocabMap[card.vocabularyId] : null
 
-  function handleRate(rating) {
-    const updated = rateCard(currentCard, rating)
+  function rate(rating) {
+    const updated = rateCard(card, rating)
     const newDeck = { ...deck, [updated.vocabularyId]: updated }
     setDeck(newDeck)
     saveDeck(newDeck)
@@ -39,176 +31,141 @@ export default function Practice() {
 
     if (rating === RATINGS.GOOD || rating === RATINGS.EASY) {
       addXP(XP_REWARDS.FLASHCARD_GOOD)
-      setSessionCorrect((c) => c + 1)
+      setGood(g => g + 1)
     }
 
-    setSessionDone((d) => d + 1)
     setFlipped(false)
-
-    if (currentIdx + 1 >= sessionCards.length) {
-      setCurrentIdx(sessionCards.length) // signals session end
-    } else {
-      setCurrentIdx((i) => i + 1)
-      setShowBemba((prev) => (Math.random() > 0.5 ? !prev : prev))
-    }
+    if (idx + 1 >= totalDue) setDone(true)
+    else setIdx(i => i + 1)
   }
 
-  // Empty state
+  /* Empty */
   if (totalDue === 0) {
-    const nextReview = getNextReviewTime(deck)
+    const next = getNextReviewTime(deck)
     const deckSize = Object.keys(deck).length
     return (
-      <div className="space-y-6 animate-fade-in">
-        <h1 className="font-serif text-3xl text-ink">Flashcards</h1>
-        <div className="text-center py-12">
-          <div className="text-6xl mb-4">🎉</div>
-          <h2 className="font-serif text-2xl text-ink mb-2">You're all caught up!</h2>
-          {deckSize === 0 ? (
-            <p className="text-ink/60 text-sm">Complete a lesson to add cards to your deck.</p>
-          ) : (
-            <>
-              <p className="text-ink/60 text-sm mb-2">No cards due right now.</p>
-              {nextReview && (
-                <p className="text-terracotta-500 text-sm font-medium">
-                  Next review: {nextReview.toLocaleDateString('en-GB', { weekday: 'long', month: 'long', day: 'numeric' })}
-                </p>
-              )}
-            </>
-          )}
+      <div className="min-h-dvh bg-cream flex flex-col">
+        <div className="bg-white px-5 pt-12 pb-5 shadow-sm">
+          <h1 className="font-serif text-2xl font-bold text-ink">Flashcards 🃏</h1>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center space-y-5 pb-24">
+          <div className="text-7xl animate-float">🎉</div>
+          <h2 className="font-serif text-2xl font-bold text-ink">All caught up!</h2>
+          {deckSize === 0
+            ? <p className="text-ink/60">Finish a lesson first to get cards to practice!</p>
+            : <>
+                <p className="text-ink/60">No cards ready right now.</p>
+                {next && (
+                  <div className="bg-terracotta-50 border-2 border-terracotta-200 rounded-2xl px-5 py-3">
+                    <p className="text-terracotta-700 font-bold text-sm">
+                      ⏰ Come back {next.toLocaleDateString('en-GB', { weekday: 'long' })}!
+                    </p>
+                  </div>
+                )}
+              </>
+          }
         </div>
       </div>
     )
   }
 
-  // Session complete
-  if (currentIdx >= totalDue) {
-    const pct = Math.round((sessionCorrect / totalDue) * 100)
+  /* Done */
+  if (done) {
+    const pct = Math.round((sessionGood / totalDue) * 100)
     return (
-      <div className="space-y-6 animate-fade-in">
-        <h1 className="font-serif text-3xl text-ink">Flashcards</h1>
-        <div className="text-center py-8 space-y-5">
-          <div className="text-6xl">{pct >= 80 ? '🌟' : pct >= 50 ? '💪' : '🔄'}</div>
-          <h2 className="font-serif text-2xl text-ink">Session complete</h2>
-          <div className="bg-white/80 border border-terracotta-100 rounded-2xl p-6 inline-block">
-            <div className="text-5xl font-bold text-terracotta-500">{pct}%</div>
-            <p className="text-ink/60 text-sm mt-1">
-              {sessionCorrect} of {totalDue} cards rated Good or Easy
-            </p>
-          </div>
-          <div className="bg-gold-400/20 border border-gold-500/40 rounded-xl px-5 py-3 inline-block">
-            <p className="text-gold-600 font-bold">+{sessionCorrect * XP_REWARDS.FLASHCARD_GOOD} XP earned</p>
-          </div>
-          <button
-            onClick={() => window.location.reload()}
-            className="block w-full max-w-xs mx-auto bg-terracotta-500 hover:bg-terracotta-600 text-cream font-semibold py-3 rounded-xl transition-colors"
-          >
-            Practice again
-          </button>
+      <div className="min-h-dvh bg-cream flex flex-col items-center justify-center px-6 text-center space-y-6 pb-24">
+        <div className="text-7xl">{pct >= 70 ? '🌟' : '💪'}</div>
+        <h2 className="font-serif text-3xl font-bold text-ink">Practice done!</h2>
+        <div className="bg-white rounded-3xl border-2 border-gray-100 p-6 shadow-sm">
+          <div className="text-5xl font-bold text-terracotta-500">{pct}%</div>
+          <p className="text-ink/50 mt-1">{sessionGood} of {totalDue} remembered</p>
         </div>
+        <div className="bg-gold-400/20 border-2 border-gold-400 rounded-2xl px-6 py-3">
+          <p className="text-gold-600 font-bold">+{sessionGood * XP_REWARDS.FLASHCARD_GOOD} XP 🎊</p>
+        </div>
+        <button
+          onClick={() => window.location.reload()}
+          className="w-full bg-terracotta-500 active:bg-terracotta-600 text-white font-bold py-4 rounded-3xl text-lg shadow-md transition-all active:scale-95"
+        >
+          Practice again!
+        </button>
       </div>
     )
   }
 
   return (
-    <div className="space-y-5 animate-fade-in">
+    <div className="min-h-dvh bg-cream flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="font-serif text-3xl text-ink">Flashcards</h1>
-        <span className="text-xs text-ink/50 tabular-nums">
-          {currentIdx + 1} / {totalDue}
-        </span>
+      <div className="bg-white px-5 pt-12 pb-4 shadow-sm flex-shrink-0">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="font-serif text-2xl font-bold text-ink">Flashcards 🃏</h1>
+          <span className="text-sm font-bold text-ink/40">{idx + 1}/{totalDue}</span>
+        </div>
+        <div className="bg-gray-100 rounded-full h-3 overflow-hidden">
+          <div
+            className="h-full bg-terracotta-400 rounded-full transition-all"
+            style={{ width: `${(idx / totalDue) * 100}%` }}
+          />
+        </div>
       </div>
 
-      {/* Progress */}
-      <div className="bg-cream rounded-full h-2 overflow-hidden">
+      {/* Card flip */}
+      <div className="flex-1 flex flex-col px-5 py-6 pb-28">
         <div
-          className="h-full bg-terracotta-400 rounded-full transition-all"
-          style={{ width: `${((currentIdx) / totalDue) * 100}%` }}
-        />
-      </div>
-
-      {/* Card */}
-      <div className="card-flip cursor-pointer" onClick={() => setFlipped((f) => !f)}>
-        <div className={`card-flip-inner min-h-72 relative ${flipped ? 'flipped' : ''}`}>
-          {/* Front */}
-          <div className="card-face absolute inset-0 bg-white border border-terracotta-100 rounded-2xl shadow-sm flex flex-col items-center justify-center p-8 text-center">
-            <p className="text-xs text-ink/40 uppercase tracking-widest mb-6">
-              {showBemba ? 'Icibemba' : 'English'}
-            </p>
-            {showBemba ? (
-              <>
-                <p className="font-serif text-4xl text-ink font-bold mb-3">{vocab?.bemba}</p>
-                <p className="text-terracotta-500 text-base italic">{vocab?.phonetic}</p>
-              </>
-            ) : (
-              <p className="font-serif text-3xl text-ink font-bold">{vocab?.english}</p>
-            )}
-            <p className="text-xs text-ink/30 mt-8">Tap to flip</p>
-          </div>
-
-          {/* Back */}
-          <div className="card-face card-back absolute inset-0 bg-forest-600 rounded-2xl shadow-sm flex flex-col items-center justify-center p-8 text-center">
-            <p className="text-xs text-forest-300 uppercase tracking-widest mb-6">
-              {showBemba ? 'English' : 'Icibemba'}
-            </p>
-            {showBemba ? (
-              <p className="font-serif text-3xl text-cream font-bold mb-5">{vocab?.english}</p>
-            ) : (
-              <>
-                <p className="font-serif text-3xl text-cream font-bold mb-2">{vocab?.bemba}</p>
-                <p className="text-forest-300 text-base italic mb-5">{vocab?.phonetic}</p>
-              </>
-            )}
-            {vocab?.exampleBemba && (
-              <div className="bg-forest-700/60 rounded-xl px-5 py-3 max-w-sm">
-                <p className="text-cream/90 text-sm italic mb-1">{vocab.exampleBemba}</p>
-                <p className="text-forest-300 text-xs">{vocab.exampleEnglish}</p>
-              </div>
-            )}
+          className="card-flip flex-1 cursor-pointer select-none"
+          onClick={() => setFlipped(f => !f)}
+        >
+          <div className={`card-flip-inner h-full relative ${flipped ? 'flipped' : ''}`} style={{ minHeight: 280 }}>
+            {/* Front */}
+            <div className="card-face absolute inset-0 bg-white border-2 border-gray-100 rounded-3xl shadow-md flex flex-col items-center justify-center p-8 text-center">
+              <p className="text-xs text-ink/30 uppercase tracking-widest mb-6 font-bold">Icibemba</p>
+              <p className="font-serif text-5xl font-bold text-ink mb-3">{vocab?.bemba}</p>
+              <p className="text-terracotta-500 text-lg italic">{vocab?.phonetic}</p>
+              <p className="text-xs text-ink/20 mt-8 font-semibold">TAP TO FLIP</p>
+            </div>
+            {/* Back */}
+            <div className="card-face card-back absolute inset-0 bg-forest-600 rounded-3xl shadow-md flex flex-col items-center justify-center p-8 text-center">
+              <p className="text-xs text-forest-300 uppercase tracking-widest mb-5 font-bold">English</p>
+              <p className="font-serif text-4xl font-bold text-white mb-4">{vocab?.english}</p>
+              {vocab?.exampleBemba && (
+                <div className="bg-forest-700/60 rounded-2xl px-4 py-3 max-w-xs">
+                  <p className="text-white/80 text-sm italic mb-1">{vocab.exampleBemba}</p>
+                  <p className="text-forest-300 text-xs">{vocab.exampleEnglish}</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Rating buttons (only when flipped) */}
-      <div
-        className={`transition-all duration-300 ${
-          flipped ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
-        }`}
-      >
-        <p className="text-center text-xs text-ink/40 mb-3">How well did you know this?</p>
-        <div className="grid grid-cols-4 gap-2">
-          {RATING_CONFIG.map((r) => (
+        {/* Rating buttons — only when flipped */}
+        <div className={`mt-5 transition-all duration-300 ${flipped ? 'opacity-100' : 'opacity-0 pointer-events-none translate-y-4'}`}>
+          <p className="text-center text-xs font-bold text-ink/30 uppercase tracking-wider mb-3">Did you remember it?</p>
+          <div className="grid grid-cols-2 gap-3">
             <button
-              key={r.key}
-              onClick={(e) => { e.stopPropagation(); handleRate(r.key) }}
-              className={`border-2 rounded-xl py-3 px-2 font-semibold text-xs flex flex-col items-center gap-1 transition-all ${r.color}`}
+              onClick={e => { e.stopPropagation(); rate(RATINGS.AGAIN) }}
+              className="bg-[#fde8e0] border-2 border-red-200 text-red-600 font-bold py-4 rounded-2xl text-base flex flex-col items-center gap-1 active:scale-95 transition-all shadow-sm"
             >
-              <span className="text-lg">{r.emoji}</span>
-              {r.label}
+              <span className="text-2xl">🤔</span>
+              Not yet
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Session stats */}
-      <div className="flex justify-center gap-6 text-center pt-2">
-        <div>
-          <div className="text-lg font-bold text-forest-600">{sessionDone}</div>
-          <div className="text-xs text-ink/40">reviewed</div>
-        </div>
-        <div>
-          <div className="text-lg font-bold text-terracotta-500">{totalDue - currentIdx}</div>
-          <div className="text-xs text-ink/40">remaining</div>
+            <button
+              onClick={e => { e.stopPropagation(); rate(RATINGS.GOOD) }}
+              className="bg-[#d7f5e3] border-2 border-green-300 text-green-700 font-bold py-4 rounded-2xl text-base flex flex-col items-center gap-1 active:scale-95 transition-all shadow-sm"
+            >
+              <span className="text-2xl">💪</span>
+              I knew it!
+            </button>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]]
   }
-  return arr
+  return a
 }

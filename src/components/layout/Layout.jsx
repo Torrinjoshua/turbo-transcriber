@@ -1,26 +1,24 @@
-import { Outlet } from 'react-router-dom'
-import Sidebar from './Sidebar.jsx'
+import { Outlet, useLocation } from 'react-router-dom'
 import BottomNav from './BottomNav.jsx'
 
 export default function Layout() {
-  return (
-    <div className="min-h-dvh flex">
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0">
-        <Sidebar />
-      </aside>
+  const location = useLocation()
+  // Hide bottom nav during active lesson exercises
+  const inLesson = /^\/lessons\/lesson-/.test(location.pathname)
 
-      {/* Main content */}
-      <main className="flex-1 lg:ml-64 pb-20 lg:pb-0">
-        <div className="max-w-3xl mx-auto px-4 py-6 lg:px-8 lg:py-8">
-          <Outlet />
-        </div>
+  return (
+    <div className="phone-frame flex flex-col">
+      {/* Scrollable content */}
+      <main className={`flex-1 overflow-y-auto ${inLesson ? 'pb-0' : 'pb-24'}`}>
+        <Outlet />
       </main>
 
-      {/* Mobile bottom nav */}
-      <div className="lg:hidden fixed bottom-0 inset-x-0 z-50">
-        <BottomNav />
-      </div>
+      {/* Bottom nav — hidden inside active lesson */}
+      {!inLesson && (
+        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-50">
+          <BottomNav />
+        </div>
+      )}
     </div>
   )
 }

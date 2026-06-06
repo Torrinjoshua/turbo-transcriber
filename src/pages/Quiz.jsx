@@ -1,386 +1,309 @@
 import { useState, useMemo } from 'react'
-import { getProgress, addXP, logActivity, recordQuiz, recordAccuracy } from '../utils/storage.js'
+import { getProgress, addXP, logActivity, recordQuiz } from '../utils/storage.js'
 import { getAllVocabulary, getVocabularyByLessonIds } from '../data/lessons.js'
 import { XP_REWARDS } from '../utils/xp.js'
 
-const QUIZ_TYPES = ['multiple-choice', 'fill-in-blank', 'matching']
-const QUESTIONS_PER_QUIZ = 10
+const QUIZ_LEN = 8
+const CORRECT_MSG = ['Amazing! 🌟', 'You got it! 🎉', 'Mwabombeni! 💪', 'Superstar! ⭐']
+const WRONG_MSG   = ['Almost! Try again 💙', 'Not quite — keep going! 🤗', 'You can do it! 💫']
+const rand = arr => arr[Math.floor(Math.random() * arr.length)]
 
 export default function Quiz() {
   const progress = getProgress()
   const completedLessons = progress.lessonsCompleted || []
-  const availableVocab = useMemo(
-    () => getVocabularyByLessonIds(completedLessons),
-    [completedLessons.join(',')]
-  )
+  const available = useMemo(() => {
+    const v = getVocabularyByLessonIds(completedLessons)
+    return v.length >= 4 ? v : getAllVocabulary()
+  }, [completedLessons.join(',')])
   const allVocab = useMemo(() => getAllVocabulary(), [])
 
-  const [phase, setPhase] = useState('select') // select | quiz | results
+  const [phase, setPhase]       = useState('select')
   const [quizType, setQuizType] = useState(null)
-  const [questions, setQuestions] = useState([])
-  const [currentQ, setCurrentQ] = useState(0)
-  const [answers, setAnswers] = useState([]) // {correct: bool}
-  const [typedAnswer, setTypedAnswer] = useState('')
-  const [answerState, setAnswerState] = useState(null) // null | 'correct' | 'wrong'
-  const [selectedOption, setSelectedOption] = useState(null)
-  const [matchSelected, setMatchSelected] = useState({ left: null, right: null })
-  const [matchPairs, setMatchPairs] = useState([]) // {bembaId, englishId}
-  const [matchedIds, setMatchedIds] = useState(new Set())
+  const [questions, setQs]      = useState([])
+  const [qIdx, setQIdx]         = useState(0)
+  const [answered, setAnswered] = useState(null)
+  const [score, setScore]       = useState(0)
+  const [typedAns, setTyped]    = useState('')
+  // match state
+  const [matchSel, setMatchSel]     = useState(null)
+  const [matchMatched, setMatched]  = useState(new Set())
+  const [matchWrong, setMatchWrong] = useState(null)
+  const [matchScore, setMatchScore] = useState(0)
 
   function startQuiz(type) {
-    const pool = availableVocab.length >= 6 ? availableVocab : allVocab
+    const pool = available.length >= 4 ? available : allVocab
     let qs
-
-    if (type === 'matching') {
-      qs = [buildMatchingQuestion(pool)]
+    if (type === 'match') {
+      const words = shuffle([...pool]).slice(0, 6)
+      qs = [{ type: 'match', words, shuffled: shuffle([...words]) }]
     } else {
-      qs = buildQuestions(type, pool, QUESTIONS_PER_QUIZ, allVocab)
+      qs = buildMCQuestions(type, pool, allVocab, QUIZ_LEN)
     }
-
-    setQuizType(type)
-    setQuestions(qs)
-    setCurrentQ(0)
-    setAnswers([])
-    setTypedAnswer('')
-    setAnswerState(null)
-    setSelectedOption(null)
-    setMatchSelected({ left: null, right: null })
-    setMatchPairs([])
-    setMatchedIds(new Set())
+    setQs(qs); setQuizType(type); setQIdx(0)
+    setAnswered(null); setScore(0); setTyped('')
+    setMatchSel(null); setMatched(new Set()); setMatchWrong(null); setMatchScore(0)
     setPhase('quiz')
   }
 
-  function handleMultipleChoiceSelect(option) {
-    if (answerState) return
-    const q = questions[currentQ]
-    const correct = option === q.correctAnswer
-    setSelectedOption(option)
-    setAnswerState(correct ? 'correct' : 'wrong')
-    setAnswers((a) => [...a, { correct }])
+  function answerMC(option) {
+    if (answered) return
+    const ok = option === questions[qIdx].correct
+    setAnswered({ isCorrect: ok, selected: option })
+    if (ok) setScore(s => s + 1)
   }
 
-  function handleFillSubmit(e) {
+  function submitFill(e) {
     e?.preventDefault()
-    if (answerState) return
-    const q = questions[currentQ]
-    const correct = typedAnswer.trim().toLowerCase() === q.correctAnswer.toLowerCase()
-    setAnswerState(correct ? 'correct' : 'wrong')
-    setAnswers((a) => [...a, { correct }])
+    if (answered) return
+    const ok = typedAns.trim().toLowerCase() === questions[qIdx].correct.toLowerCase()
+    setAnswered({ isCorrect: ok })
+    if (ok) setScore(s => s + 1)
   }
 
-  function handleNext() {
-    if (currentQ + 1 >= questions.length) {
-      finishQuiz()
+  function nextQ() {
+    setAnswered(null); setTyped('')
+    if (qIdx + 1 >= questions.length) finish(score + (answered?.isCorrect ? 0 : 0))
+    else setQIdx(i => i + 1)
+  }
+
+  function tapMatch(side, id) {
+    if (matchMatched.has(id)) return
+    if (!matchSel) { setMatchSel({ side, id }); return }
+    if (matchSel.side === side) { setMatchSel({ side, id }); return }
+    if (matchSel.id === id) {
+      const nm = new Set([...matchMatched, id])
+      setMatched(nm); setMatchSel(null); setMatchScore(s => s + 1)
+      if (nm.size === questions[0].words.length) setTimeout(() => finishMatch(matchScore + 1), 600)
     } else {
-      setCurrentQ((i) => i + 1)
-      setAnswerState(null)
-      setSelectedOption(null)
-      setTypedAnswer('')
+      setMatchWrong({ a: matchSel.id, b: id }); setMatchSel(null)
+      setTimeout(() => setMatchWrong(null), 700)
     }
   }
 
-  function handleMatchClick(side, id) {
-    if (matchedIds.has(id)) return
-    const sel = { ...matchSelected, [side]: id }
-    setMatchSelected(sel)
-
-    if (sel.left && sel.right) {
-      const leftVocab = questions[0].pairs.find((p) => p.id === sel.left)
-      const rightVocab = questions[0].pairs.find((p) => p.id === sel.right)
-      if (sel.left === sel.right) {
-        setMatchedIds((prev) => new Set([...prev, sel.left]))
-        setMatchPairs((p) => [...p, { id: sel.left, correct: true }])
-        setAnswers((a) => [...a, { correct: true }])
-      } else {
-        setMatchPairs((p) => [...p, { leftId: sel.left, rightId: sel.right, correct: false }])
-        setAnswers((a) => [...a, { correct: false }])
-        setTimeout(() => setMatchPairs((p) => p.filter((x) => x.leftId !== sel.left || x.rightId !== sel.right)), 700)
-      }
-      setMatchSelected({ left: null, right: null })
-    } else {
-      setMatchSelected(sel)
-    }
+  function finishMatch(finalScore) {
+    addXP(XP_REWARDS.QUIZ_COMPLETE); logActivity()
+    recordQuiz(null, finalScore, questions[0].words.length)
+    setScore(finalScore); setPhase('results')
   }
 
-  function finishQuiz() {
-    const score = answers.filter((a) => a.correct).length
-    const total = answers.length
-    addXP(XP_REWARDS.QUIZ_COMPLETE)
-    logActivity()
-    recordQuiz(null, score, total)
+  function finish(finalScore) {
+    addXP(XP_REWARDS.QUIZ_COMPLETE); logActivity()
+    recordQuiz(null, finalScore, questions.length)
     setPhase('results')
   }
 
-  if (availableVocab.length < 4) {
+  if (completedLessons.length === 0 && available.length < 4) {
     return (
-      <div className="space-y-6 animate-fade-in">
-        <h1 className="font-serif text-3xl text-ink">Quiz</h1>
-        <div className="text-center py-16">
-          <div className="text-5xl mb-4">📚</div>
-          <h2 className="font-serif text-xl text-ink mb-2">Complete a lesson first</h2>
-          <p className="text-ink/60 text-sm">
-            You need at least one completed lesson to take a quiz.
-          </p>
+      <div className="min-h-dvh bg-cream flex flex-col">
+        <div className="bg-white px-5 pt-12 pb-5 shadow-sm">
+          <h1 className="font-serif text-2xl font-bold text-ink">Quiz 🎮</h1>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center pb-24 space-y-4">
+          <div className="text-6xl">📚</div>
+          <h2 className="font-serif text-xl font-bold text-ink">Finish a lesson first!</h2>
+          <p className="text-ink/60">Complete a lesson to unlock quizzes.</p>
         </div>
       </div>
     )
   }
 
-  if (phase === 'select') {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div>
-          <h1 className="font-serif text-3xl text-ink">Quiz</h1>
-          <p className="text-ink/60 text-sm mt-1">Test your Bemba knowledge</p>
-        </div>
-
-        <div className="space-y-3">
-          <QuizTypeCard
-            icon="🎯"
-            title="Multiple Choice"
-            description="See a Bemba word and pick the correct English meaning from 4 options."
-            onClick={() => startQuiz('multiple-choice')}
-          />
-          <QuizTypeCard
-            icon="✍️"
-            title="Fill in the Blank"
-            description="Type the Bemba word for a given English meaning."
-            onClick={() => startQuiz('fill-in-blank')}
-          />
-          <QuizTypeCard
-            icon="🔗"
-            title="Matching"
-            description="Match 6 Bemba words to their English meanings."
-            onClick={() => startQuiz('matching')}
-          />
-        </div>
+  if (phase === 'select') return (
+    <div className="min-h-dvh bg-cream flex flex-col">
+      <div className="bg-white px-5 pt-12 pb-5 shadow-sm">
+        <h1 className="font-serif text-2xl font-bold text-ink">Quiz 🎮</h1>
+        <p className="text-ink/50 text-sm mt-0.5">Test what you've learned!</p>
       </div>
-    )
-  }
+      <div className="flex-1 px-5 py-6 space-y-3 pb-28">
+        <QuizCard icon="🎯" title="Multiple Choice" desc="See a Bemba word — pick the right meaning!" onClick={() => startQuiz('mc')} color="bg-terracotta-500" />
+        <QuizCard icon="✍️" title="Fill in the Blank" desc="See the English — type the Bemba word!" onClick={() => startQuiz('fill')} color="bg-forest-600" />
+        <QuizCard icon="🔗" title="Matching Game" desc="Match 6 Bemba words to their English meanings!" onClick={() => startQuiz('match')} color="bg-gold-500" textColor="text-ink" />
+      </div>
+    </div>
+  )
 
   if (phase === 'results') {
-    const score = answers.filter((a) => a.correct).length
-    const total = answers.length
+    const total = quizType === 'match' ? questions[0].words.length : questions.length
     const pct = Math.round((score / total) * 100)
     return (
-      <div className="space-y-6 animate-fade-in text-center">
-        <h1 className="font-serif text-3xl text-ink">Quiz Results</h1>
-        <div className="text-6xl">{pct >= 80 ? '🌟' : pct >= 50 ? '💪' : '📖'}</div>
-        <div className="bg-white/80 border border-terracotta-100 rounded-2xl p-8">
-          <div className="text-6xl font-bold text-terracotta-500 mb-1">{pct}%</div>
-          <p className="text-ink/60">{score} of {total} correct</p>
+      <div className="min-h-dvh bg-cream flex flex-col items-center justify-center px-6 text-center space-y-6 pb-24">
+        <div className="text-7xl">{pct >= 70 ? '🌟' : '💪'}</div>
+        <h2 className="font-serif text-3xl font-bold text-ink">Quiz done!</h2>
+        <div className="bg-white rounded-3xl border-2 border-gray-100 p-6 shadow-sm w-full">
+          <div className="text-5xl font-bold text-terracotta-500">{pct}%</div>
+          <p className="text-ink/50 mt-1">{score} of {total} correct</p>
         </div>
-        <div className="bg-gold-400/20 border border-gold-500/40 rounded-xl px-5 py-3 inline-block">
-          <p className="text-gold-600 font-bold">+{XP_REWARDS.QUIZ_COMPLETE} XP</p>
+        <div className="bg-gold-400/20 border-2 border-gold-400 rounded-2xl px-6 py-3">
+          <p className="text-gold-600 font-bold">+{XP_REWARDS.QUIZ_COMPLETE} XP 🎊</p>
         </div>
-        <div className="flex flex-col gap-3">
-          <button
-            onClick={() => setPhase('select')}
-            className="w-full bg-terracotta-500 hover:bg-terracotta-600 text-cream font-semibold py-3 rounded-xl transition-colors"
-          >
-            Try another quiz
-          </button>
-        </div>
+        <button
+          onClick={() => setPhase('select')}
+          className="w-full bg-terracotta-500 active:bg-terracotta-600 text-white font-bold py-4 rounded-3xl text-lg shadow-md transition-all active:scale-95"
+        >
+          Play again!
+        </button>
       </div>
     )
   }
 
-  // Quiz in progress
-  if (quizType === 'matching') {
+  /* ── Matching quiz ── */
+  if (quizType === 'match' && phase === 'quiz') {
     const q = questions[0]
-    const allMatched = matchedIds.size === q.pairs.length
+    const allMatchedDone = matchMatched.size === q.words.length
     return (
-      <div className="space-y-5 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <h1 className="font-serif text-2xl text-ink">Matching</h1>
-          <button onClick={() => setPhase('select')} className="text-xs text-ink/40 hover:text-ink">
-            Quit
-          </button>
+      <div className="min-h-dvh bg-cream flex flex-col">
+        <div className="bg-white px-5 pt-12 pb-4 shadow-sm flex-shrink-0">
+          <div className="flex items-center justify-between mb-3">
+            <button onClick={() => setPhase('select')} className="text-gray-400 text-2xl">✕</button>
+            <h2 className="font-bold text-ink">Matching Game 🔗</h2>
+            <div />
+          </div>
         </div>
 
-        {allMatched ? (
-          <div className="text-center py-6 space-y-4 animate-slide-up">
-            <div className="text-5xl">🎉</div>
-            <p className="font-serif text-xl text-ink">All matched!</p>
-            <p className="text-ink/60 text-sm">
-              {answers.filter((a) => a.correct).length} of {q.pairs.length} correct matches
-            </p>
-            <button
-              onClick={finishQuiz}
-              className="bg-forest-600 hover:bg-forest-700 text-cream font-semibold py-3 px-8 rounded-xl transition-colors"
-            >
-              See Results
+        {allMatchedDone ? (
+          <div className="flex-1 flex flex-col items-center justify-center px-6 text-center space-y-5 pb-24">
+            <div className="text-6xl animate-bounce-in">🎊</div>
+            <h2 className="font-serif text-2xl font-bold text-ink">All matched!</h2>
+            <button onClick={() => finishMatch(matchScore)} className="w-full bg-green-500 text-white font-bold py-4 rounded-3xl text-lg shadow-md active:scale-95 transition-all">
+              See results!
             </button>
           </div>
         ) : (
-          <>
-            <p className="text-sm text-ink/60">Match each Bemba word to its English meaning.</p>
+          <div className="flex-1 px-5 py-5 pb-28 overflow-y-auto">
+            <p className="text-xs font-bold text-ink/40 uppercase tracking-wider mb-4">
+              {q.words.length - matchMatched.size} pairs left
+            </p>
             <div className="grid grid-cols-2 gap-3">
-              {/* Bemba column */}
-              <div className="space-y-2">
-                <p className="text-xs text-ink/40 uppercase tracking-wider text-center mb-2">Bemba</p>
-                {q.pairs.map((pair) => {
-                  const isMatched = matchedIds.has(pair.id)
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-center text-ink/40 uppercase">Bemba</p>
+                {q.words.map(w => {
+                  const id = w.id
+                  let cls = 'bg-white border-2 border-gray-200 text-ink'
+                  if (matchMatched.has(id)) cls = 'bg-[#d7f5e3] border-2 border-green-300 text-green-700 opacity-50'
+                  else if (matchWrong && (matchWrong.a === id || matchWrong.b === id)) cls = 'bg-[#fde8e0] border-2 border-red-300 text-red-600 animate-shake'
+                  else if (matchSel?.id === id) cls = 'bg-terracotta-50 border-2 border-terracotta-500 text-terracotta-700 scale-105'
                   return (
-                    <button
-                      key={`left-${pair.id}`}
-                      onClick={() => !isMatched && handleMatchClick('left', pair.id)}
-                      disabled={isMatched}
-                      className={`w-full px-3 py-3 rounded-xl text-sm font-medium border-2 transition-all text-center ${
-                        isMatched
-                          ? 'border-forest-300 bg-forest-50 text-forest-600 opacity-50'
-                          : matchSelected.left === pair.id
-                          ? 'border-terracotta-500 bg-terracotta-50 text-terracotta-700'
-                          : 'border-ink/15 bg-white/80 text-ink hover:border-terracotta-300'
-                      }`}
-                    >
-                      {pair.bemba}
+                    <button key={`b-${id}`} onClick={() => !matchMatched.has(id) && tapMatch('bemba', id)}
+                      disabled={matchMatched.has(id)}
+                      className={`${cls} rounded-2xl px-3 py-3 font-bold text-sm text-center shadow-sm w-full transition-all active:scale-95 min-h-[52px] flex items-center justify-center`}>
+                      {w.bemba}
                     </button>
                   )
                 })}
               </div>
-
-              {/* English column */}
-              <div className="space-y-2">
-                <p className="text-xs text-ink/40 uppercase tracking-wider text-center mb-2">English</p>
-                {q.shuffledEnglish.map((pair) => {
-                  const isMatched = matchedIds.has(pair.id)
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-center text-ink/40 uppercase">English</p>
+                {q.shuffled.map(w => {
+                  const id = w.id
+                  let cls = 'bg-white border-2 border-gray-200 text-ink'
+                  if (matchMatched.has(id)) cls = 'bg-[#d7f5e3] border-2 border-green-300 text-green-700 opacity-50'
+                  else if (matchWrong && (matchWrong.a === id || matchWrong.b === id)) cls = 'bg-[#fde8e0] border-2 border-red-300 text-red-600 animate-shake'
+                  else if (matchSel?.id === id) cls = 'bg-terracotta-50 border-2 border-terracotta-500 text-terracotta-700 scale-105'
                   return (
-                    <button
-                      key={`right-${pair.id}`}
-                      onClick={() => !isMatched && handleMatchClick('right', pair.id)}
-                      disabled={isMatched}
-                      className={`w-full px-3 py-3 rounded-xl text-sm font-medium border-2 transition-all text-center ${
-                        isMatched
-                          ? 'border-forest-300 bg-forest-50 text-forest-600 opacity-50'
-                          : matchSelected.right === pair.id
-                          ? 'border-terracotta-500 bg-terracotta-50 text-terracotta-700'
-                          : 'border-ink/15 bg-white/80 text-ink hover:border-terracotta-300'
-                      }`}
-                    >
-                      {pair.english}
+                    <button key={`e-${id}`} onClick={() => !matchMatched.has(id) && tapMatch('english', id)}
+                      disabled={matchMatched.has(id)}
+                      className={`${cls} rounded-2xl px-3 py-3 font-bold text-sm text-center shadow-sm w-full transition-all active:scale-95 min-h-[52px] flex items-center justify-center`}>
+                      {w.english}
                     </button>
                   )
                 })}
               </div>
             </div>
-          </>
+          </div>
         )}
       </div>
     )
   }
 
-  // Multiple choice / fill-in-blank
-  const q = questions[currentQ]
+  /* ── MC / Fill quiz ── */
+  const q = questions[qIdx]
   if (!q) return null
+  const totalQ = questions.length
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <div className="bg-cream rounded-full h-2 overflow-hidden">
-            <div
-              className="h-full bg-terracotta-400 rounded-full transition-all"
-              style={{ width: `${(currentQ / questions.length) * 100}%` }}
+    <div className="min-h-dvh bg-cream flex flex-col">
+      <div className="bg-white px-5 pt-12 pb-4 shadow-sm flex-shrink-0">
+        <div className="flex items-center gap-3 mb-3">
+          <button onClick={() => setPhase('select')} className="text-gray-400 text-2xl flex-shrink-0">✕</button>
+          <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+            <div className="h-full bg-terracotta-400 rounded-full transition-all" style={{ width: `${(qIdx / totalQ) * 100}%` }} />
+          </div>
+          <span className="text-sm font-bold text-ink/40 flex-shrink-0">{qIdx + 1}/{totalQ}</span>
+        </div>
+      </div>
+
+      <div className="flex-1 flex flex-col px-5 py-5 overflow-y-auto">
+        {/* Question */}
+        <p className="text-ink/40 font-bold text-xs uppercase tracking-widest mb-3">{q.prompt}</p>
+        <div className="bg-white rounded-3xl border-2 border-gray-100 p-6 text-center shadow-sm mb-5 flex-shrink-0">
+          <p className="font-serif text-3xl font-bold text-ink">{q.question}</p>
+          {q.phonetic && <p className="text-terracotta-500 italic mt-1">{q.phonetic}</p>}
+        </div>
+
+        {/* MC options */}
+        {quizType === 'mc' && (
+          <div className="space-y-3 flex-1">
+            {q.options.map(opt => {
+              let cls = 'bg-white border-2 border-gray-200 text-ink'
+              if (answered) {
+                if (opt === q.correct)                     cls = 'bg-[#d7f5e3] border-2 border-green-400 text-green-800'
+                else if (answered.selected === opt)        cls = 'bg-[#fde8e0] border-2 border-red-400 text-red-700 animate-shake'
+              }
+              return (
+                <button key={opt} onClick={() => answerMC(opt)} disabled={!!answered}
+                  className={`${cls} w-full font-bold py-4 px-5 rounded-2xl text-base text-left shadow-sm active:scale-95 transition-all flex justify-between items-center`}>
+                  <span>{opt}</span>
+                  {answered && opt === q.correct && <span>✅</span>}
+                  {answered && answered.selected === opt && opt !== q.correct && <span>❌</span>}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Fill in blank */}
+        {quizType === 'fill' && (
+          <form onSubmit={submitFill} className="flex-1 flex flex-col gap-3">
+            <input
+              type="text"
+              value={typedAns}
+              onChange={e => setTyped(e.target.value)}
+              placeholder="Type the Bemba word…"
+              disabled={!!answered}
+              autoFocus
+              className={`w-full px-5 py-4 rounded-2xl border-2 bg-white focus:outline-none text-ink text-lg font-bold ${
+                answered?.isCorrect === true  ? 'border-green-400' :
+                answered?.isCorrect === false ? 'border-red-400'   : 'border-gray-200 focus:border-terracotta-400'
+              }`}
             />
-          </div>
-        </div>
-        <span className="ml-3 text-xs text-ink/50 tabular-nums flex-shrink-0">
-          {currentQ + 1}/{questions.length}
-        </span>
-        <button onClick={() => setPhase('select')} className="ml-3 text-xs text-ink/40 hover:text-ink">
-          Quit
-        </button>
-      </div>
-
-      {/* Question */}
-      <div className="bg-white/80 border border-terracotta-100 rounded-2xl p-6">
-        <p className="text-xs text-ink/40 uppercase tracking-wider mb-3">{q.prompt}</p>
-        <p className="font-serif text-2xl text-ink">{q.question}</p>
-        {q.phonetic && <p className="text-terracotta-500 text-sm italic mt-1">{q.phonetic}</p>}
-      </div>
-
-      {/* Multiple choice options */}
-      {quizType === 'multiple-choice' && (
-        <div className="space-y-2">
-          {q.options.map((option) => {
-            const isCorrect = option === q.correctAnswer
-            const isSelected = option === selectedOption
-            let cls = 'border-ink/15 bg-white/80 hover:border-terracotta-300 text-ink'
-            if (answerState && isSelected && isCorrect) cls = 'border-forest-400 bg-forest-50 text-forest-700'
-            if (answerState && isSelected && !isCorrect) cls = 'border-terracotta-500 bg-terracotta-50 text-terracotta-700'
-            if (answerState && !isSelected && isCorrect) cls = 'border-forest-400 bg-forest-50 text-forest-700'
-
-            return (
-              <button
-                key={option}
-                onClick={() => handleMultipleChoiceSelect(option)}
-                disabled={!!answerState}
-                className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-all font-medium text-sm ${cls}`}
-              >
-                {option}
-                {answerState && isCorrect && <span className="float-right">✓</span>}
-                {answerState && isSelected && !isCorrect && <span className="float-right">✗</span>}
+            {answered?.isCorrect === false && (
+              <p className="text-red-600 font-bold text-sm">Answer: <strong>{q.correct}</strong></p>
+            )}
+            {!answered && (
+              <button type="submit"
+                className="w-full bg-terracotta-500 active:bg-terracotta-600 text-white font-bold py-4 rounded-3xl text-lg shadow-md active:scale-95 transition-all">
+                Check! ✓
               </button>
-            )
-          })}
-        </div>
-      )}
+            )}
+          </form>
+        )}
+      </div>
 
-      {/* Fill in the blank */}
-      {quizType === 'fill-in-blank' && (
-        <form onSubmit={handleFillSubmit} className="space-y-3">
-          <input
-            type="text"
-            value={typedAnswer}
-            onChange={(e) => setTypedAnswer(e.target.value)}
-            placeholder="Type the Bemba word…"
-            disabled={!!answerState}
-            autoFocus
-            className={`w-full px-4 py-3 rounded-xl border-2 bg-cream focus:outline-none text-ink text-base ${
-              answerState === 'correct'
-                ? 'border-forest-400'
-                : answerState === 'wrong'
-                ? 'border-terracotta-500'
-                : 'border-terracotta-200 focus:border-terracotta-400'
-            }`}
-          />
-          {answerState === 'wrong' && (
-            <p className="text-terracotta-600 text-sm">
-              Correct answer: <strong>{q.correctAnswer}</strong>
-            </p>
-          )}
-          {!answerState && (
-            <button
-              type="submit"
-              className="w-full bg-terracotta-500 hover:bg-terracotta-600 text-cream font-semibold py-3 rounded-xl transition-colors"
-            >
-              Check
-            </button>
-          )}
-        </form>
-      )}
-
-      {/* Feedback & Next */}
-      {answerState && quizType !== 'matching' && (
-        <div className="space-y-3 animate-slide-up">
-          <div
-            className={`rounded-xl px-5 py-3 border ${
-              answerState === 'correct'
-                ? 'bg-forest-50 border-forest-200 text-forest-700'
-                : 'bg-terracotta-50 border-terracotta-200 text-terracotta-700'
-            }`}
-          >
-            <p className="font-semibold text-sm">
-              {answerState === 'correct' ? '✓ Correct! Mwabombeni!' : '✗ Not quite — keep going!'}
+      {/* Feedback panel */}
+      {answered && (
+        <div className={`animate-slide-up-fast px-5 py-5 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] flex-shrink-0 ${
+          answered.isCorrect ? 'bg-[#d7f5e3]' : 'bg-[#fde8e0]'
+        }`}>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-3xl">{answered.isCorrect ? '✅' : '❌'}</span>
+            <p className={`font-bold text-lg ${answered.isCorrect ? 'text-green-700' : 'text-red-600'}`}>
+              {answered.isCorrect ? rand(CORRECT_MSG) : rand(WRONG_MSG)}
             </p>
           </div>
-          <button
-            onClick={handleNext}
-            className="w-full bg-forest-600 hover:bg-forest-700 text-cream font-semibold py-3 rounded-xl transition-colors"
-          >
-            {currentQ + 1 >= questions.length ? 'See Results' : 'Next →'}
+          <button onClick={() => qIdx + 1 >= totalQ ? finish(score) : nextQ()}
+            className={`w-full font-bold py-4 rounded-3xl text-lg shadow-md active:scale-95 transition-all text-white ${
+              answered.isCorrect ? 'bg-green-500 active:bg-green-600' : 'bg-terracotta-500 active:bg-terracotta-600'
+            }`}>
+            {qIdx + 1 >= totalQ ? 'See results! 🎊' : 'Continue →'}
           </button>
         </div>
       )}
@@ -388,66 +311,37 @@ export default function Quiz() {
   )
 }
 
-function QuizTypeCard({ icon, title, description, onClick }) {
+function QuizCard({ icon, title, desc, onClick, color, textColor = 'text-white' }) {
   return (
-    <button
-      onClick={onClick}
-      className="w-full text-left bg-white/80 border border-terracotta-100 rounded-2xl p-5 hover:shadow-md hover:border-terracotta-300 transition-all"
-    >
-      <div className="flex items-start gap-4">
-        <div className="w-12 h-12 bg-terracotta-50 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">
-          {icon}
-        </div>
+    <button onClick={onClick}
+      className={`${color} ${textColor} w-full rounded-3xl p-5 text-left shadow-md active:scale-95 transition-all`}>
+      <div className="flex items-center gap-4">
+        <div className="text-4xl">{icon}</div>
         <div>
-          <h3 className="font-semibold text-ink text-base mb-1">{title}</h3>
-          <p className="text-ink/60 text-sm leading-relaxed">{description}</p>
+          <h3 className="font-bold text-lg">{title}</h3>
+          <p className="text-sm opacity-80">{desc}</p>
         </div>
       </div>
     </button>
   )
 }
 
-function buildQuestions(type, pool, count, allVocab) {
-  const shuffled = shuffle([...pool])
-  const selected = shuffled.slice(0, Math.min(count, shuffled.length))
-
-  return selected.map((vocab) => {
-    if (type === 'multiple-choice') {
-      const distractors = shuffle(allVocab.filter((v) => v.id !== vocab.id))
-        .slice(0, 3)
-        .map((v) => v.english)
-      const options = shuffle([vocab.english, ...distractors])
-      return {
-        prompt: 'What does this Bemba word mean?',
-        question: vocab.bemba,
-        phonetic: vocab.phonetic,
-        options,
-        correctAnswer: vocab.english,
-      }
+function buildMCQuestions(type, pool, allVocab, count) {
+  return shuffle([...pool]).slice(0, count).map(vocab => {
+    if (type === 'mc') {
+      const opts = shuffle([vocab.english, ...shuffle(allVocab.filter(v => v.id !== vocab.id)).slice(0, 3).map(v => v.english)])
+      return { prompt: 'What does this mean?', question: vocab.bemba, phonetic: vocab.phonetic, options: opts, correct: vocab.english }
     } else {
-      return {
-        prompt: 'Type the Bemba word for:',
-        question: vocab.english,
-        phonetic: null,
-        correctAnswer: vocab.bemba,
-      }
+      return { prompt: 'Type the Bemba word for:', question: vocab.english, phonetic: null, correct: vocab.bemba }
     }
   })
 }
 
-function buildMatchingQuestion(pool) {
-  const selected = shuffle([...pool]).slice(0, 6)
-  return {
-    pairs: selected.map((v) => ({ id: v.id, bemba: v.bemba, english: v.english })),
-    shuffledEnglish: shuffle(selected.map((v) => ({ id: v.id, english: v.english }))),
+function shuffle(a) {
+  const arr = [...a]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]]
   }
-}
-
-function shuffle(arr) {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
+  return arr
 }

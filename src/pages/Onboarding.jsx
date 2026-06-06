@@ -1,175 +1,124 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { saveProfile, markOnboarded, saveProgress, getProgress } from '../utils/storage.js'
-import { logActivity } from '../utils/storage.js'
+import { saveProfile, markOnboarded, saveProgress, getProgress, logActivity } from '../utils/storage.js'
 
-const DAILY_GOALS = [
-  { minutes: 5, label: '5 min', description: 'A gentle start' },
-  { minutes: 10, label: '10 min', description: 'Steady growth' },
-  { minutes: 15, label: '15 min', description: 'Full immersion' },
-]
+const AVATARS = ['🦁', '🐘', '🦒', '🦓', '🐆', '🦏']
 
 export default function Onboarding() {
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
   const [name, setName] = useState('')
-  const [dailyGoal, setDailyGoal] = useState(10)
+  const [avatar, setAvatar] = useState('🦁')
   const [error, setError] = useState('')
 
-  function handleNameSubmit(e) {
-    e.preventDefault()
-    if (!name.trim()) {
-      setError('Please enter your name')
-      return
-    }
+  function handleNameNext(e) {
+    e?.preventDefault()
+    if (!name.trim()) { setError('Type your name first!'); return }
     setError('')
     setStep(1)
   }
 
-  function handleGoalSubmit() {
-    setStep(2)
-  }
-
   function handleFinish() {
-    saveProfile({ name: name.trim(), dailyGoal, createdAt: new Date().toISOString() })
-    const progress = getProgress()
-    progress.streak = 1
-    progress.lastStudyDate = new Date().toISOString().slice(0, 10)
-    saveProgress(progress)
+    saveProfile({ name: name.trim(), avatar, dailyGoal: 10, createdAt: new Date().toISOString() })
+    const p = getProgress()
+    p.streak = 1
+    p.lastStudyDate = new Date().toISOString().slice(0, 10)
+    saveProgress(p)
     logActivity()
     markOnboarded()
     navigate('/', { replace: true })
   }
 
   return (
-    <div className="min-h-dvh textile-bg flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-md">
-        {step === 0 && (
-          <div className="animate-fade-in">
-            {/* Hero */}
-            <div className="text-center mb-10">
-              <div className="text-7xl mb-4">🌿</div>
-              <h1 className="font-serif text-4xl font-bold text-forest-600 mb-3">Mother Tongue</h1>
-              <p className="text-terracotta-500 text-lg font-medium italic mb-6">
-                Reclaim your roots. One word at a time.
-              </p>
-              <p className="text-ink/70 text-sm leading-relaxed max-w-sm mx-auto">
-                A language learning app built for the Zambian diaspora — helping families reconnect with
-                Icibemba, the language of their roots.
-              </p>
-            </div>
-
-            {/* Name form */}
-            <div className="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-terracotta-100 p-6">
-              <h2 className="font-serif text-xl text-ink mb-1">What shall we call you?</h2>
-              <p className="text-sm text-ink/60 mb-5">Your name in our home.</p>
-              <form onSubmit={handleNameSubmit} className="space-y-4">
-                <div>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Your name…"
-                    className="w-full px-4 py-3 rounded-xl border border-terracotta-200 bg-cream focus:outline-none focus:ring-2 focus:ring-terracotta-400 text-ink text-base"
-                    autoFocus
-                  />
-                  {error && <p className="text-terracotta-500 text-xs mt-1">{error}</p>}
-                </div>
-                <button
-                  type="submit"
-                  className="w-full bg-terracotta-500 hover:bg-terracotta-600 text-cream font-semibold py-3 px-6 rounded-xl transition-colors"
-                >
-                  Continue
-                </button>
-              </form>
-            </div>
+    <div className="phone-frame min-h-dvh textile-bg flex flex-col items-center justify-center px-6 py-10">
+      {/* Step 0 — Name */}
+      {step === 0 && (
+        <div className="w-full text-center animate-fade-in space-y-6">
+          <div className="animate-float text-8xl mb-2">🌿</div>
+          <div>
+            <h1 className="font-serif text-4xl font-bold text-forest-600">Mother Tongue</h1>
+            <p className="text-terracotta-500 font-semibold mt-2 italic text-lg">
+              Learn Bemba — the language of Zambia!
+            </p>
           </div>
-        )}
 
-        {step === 1 && (
-          <div className="animate-fade-in">
-            <div className="text-center mb-8">
-              <div className="text-5xl mb-4">🕐</div>
-              <h2 className="font-serif text-3xl text-forest-600 mb-2">Set your daily goal</h2>
-              <p className="text-ink/60 text-sm">
-                Consistent practice — even just a few minutes — builds lasting fluency.
-              </p>
-            </div>
+          <div className="bg-white rounded-3xl shadow-md p-6 text-left space-y-4">
+            <label className="block font-bold text-ink text-lg">What's your name? 👋</label>
+            <form onSubmit={handleNameNext}>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Your name…"
+                className="w-full px-5 py-4 rounded-2xl border-2 border-terracotta-200 bg-cream focus:outline-none focus:border-terracotta-500 text-ink text-lg font-semibold"
+                autoFocus
+              />
+              {error && <p className="text-terracotta-500 text-sm font-semibold mt-2">{error}</p>}
+            </form>
+            <button
+              onClick={handleNameNext}
+              className="w-full bg-terracotta-500 active:bg-terracotta-600 text-white font-bold py-4 rounded-2xl text-lg shadow-md transition-all active:scale-95"
+            >
+              Let's go! →
+            </button>
+          </div>
+        </div>
+      )}
 
-            <div className="space-y-3 mb-6">
-              {DAILY_GOALS.map((goal) => (
+      {/* Step 1 — Avatar */}
+      {step === 1 && (
+        <div className="w-full text-center animate-fade-in space-y-6">
+          <div className="text-6xl">🎉</div>
+          <div>
+            <h2 className="font-serif text-3xl font-bold text-forest-600">Hi, {name}!</h2>
+            <p className="text-ink/70 mt-2 text-base">Pick your learning buddy</p>
+          </div>
+
+          <div className="bg-white rounded-3xl shadow-md p-6 space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              {AVATARS.map(a => (
                 <button
-                  key={goal.minutes}
-                  onClick={() => setDailyGoal(goal.minutes)}
-                  className={`w-full flex items-center justify-between px-5 py-4 rounded-xl border-2 transition-all ${
-                    dailyGoal === goal.minutes
-                      ? 'border-terracotta-500 bg-terracotta-50'
-                      : 'border-terracotta-100 bg-white/80 hover:border-terracotta-300'
+                  key={a}
+                  onClick={() => setAvatar(a)}
+                  className={`text-5xl py-4 rounded-2xl border-3 transition-all active:scale-95 ${
+                    avatar === a
+                      ? 'bg-terracotta-50 border-terracotta-500 scale-110 shadow-md'
+                      : 'bg-cream border-transparent'
                   }`}
+                  style={{ border: avatar === a ? '3px solid #c1440e' : '3px solid transparent' }}
                 >
-                  <div className="text-left">
-                    <span className="font-semibold text-ink text-base">{goal.label} / day</span>
-                    <p className="text-xs text-ink/50">{goal.description}</p>
-                  </div>
-                  {dailyGoal === goal.minutes && (
-                    <span className="text-terracotta-500 text-xl">✓</span>
-                  )}
+                  {a}
                 </button>
               ))}
             </div>
 
-            <button
-              onClick={handleGoalSubmit}
-              className="w-full bg-terracotta-500 hover:bg-terracotta-600 text-cream font-semibold py-3 px-6 rounded-xl transition-colors"
-            >
-              Continue
-            </button>
-          </div>
-        )}
+            <div className="bg-forest-50 rounded-2xl p-4 text-left">
+              <p className="text-forest-700 text-sm leading-relaxed font-medium">
+                🌍 You're about to learn <strong>Icibemba</strong> — a beautiful language
+                spoken by millions in Zambia. Every word connects you to your roots!
+              </p>
+            </div>
 
-        {step === 2 && (
-          <div className="animate-fade-in text-center">
-            <div className="text-6xl mb-6">🌍</div>
-            <h2 className="font-serif text-3xl text-forest-600 mb-4">
-              Mwaiseni, {name}!
-            </h2>
-            <p className="text-terracotta-600 font-medium italic mb-6">Welcome.</p>
-            <div className="bg-white/80 backdrop-blur rounded-2xl border border-terracotta-100 p-6 mb-8 text-left">
-              <p className="text-ink/80 text-sm leading-relaxed mb-4">
-                Icibemba is not just a language — it is a living connection to your heritage, your elders,
-                and the land of Zambia. Every word you learn is a thread woven back into the fabric of
-                who you are.
-              </p>
-              <p className="text-ink/80 text-sm leading-relaxed">
-                This app is your guide. Start with greetings, build through family and food, and let the
-                language grow in you the way it once grew in those who came before you.
-              </p>
-            </div>
-            <div className="bg-forest-50 rounded-xl p-4 mb-6 border border-forest-200">
-              <p className="text-forest-700 text-sm font-medium">
-                🎯 Your goal: <strong>{dailyGoal} minutes</strong> per day
-              </p>
-            </div>
             <button
               onClick={handleFinish}
-              className="w-full bg-forest-600 hover:bg-forest-700 text-cream font-semibold py-4 px-6 rounded-xl transition-colors text-base"
+              className="w-full bg-forest-600 active:bg-forest-700 text-white font-bold py-4 rounded-2xl text-lg shadow-md transition-all active:scale-95"
             >
-              Begin My Journey
+              Start Learning! 🚀
             </button>
           </div>
-        )}
-
-        {/* Step indicators */}
-        <div className="flex justify-center gap-2 mt-8">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className={`h-1.5 rounded-full transition-all ${
-                i === step ? 'w-8 bg-terracotta-500' : 'w-2 bg-terracotta-200'
-              }`}
-            />
-          ))}
         </div>
+      )}
+
+      {/* Step dots */}
+      <div className="flex gap-2 mt-8">
+        {[0, 1].map(i => (
+          <div
+            key={i}
+            className={`rounded-full transition-all ${
+              i === step ? 'w-8 h-2.5 bg-terracotta-500' : 'w-2.5 h-2.5 bg-terracotta-200'
+            }`}
+          />
+        ))}
       </div>
     </div>
   )

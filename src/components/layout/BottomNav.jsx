@@ -1,32 +1,48 @@
 import { NavLink } from 'react-router-dom'
 
-const NAV_ITEMS = [
-  { to: '/', label: 'Home', icon: '🏠', end: true },
-  { to: '/lessons', label: 'Lessons', icon: '📚' },
-  { to: '/practice', label: 'Practice', icon: '🃏' },
-  { to: '/quiz', label: 'Quiz', icon: '🧠' },
-  { to: '/couples', label: 'Couples', icon: '🫶' },
-  { to: '/progress', label: 'Progress', icon: '📊' },
-  { to: '/pronunciation', label: 'Sounds', icon: '🔊' },
+const NAV = [
+  { to: '/',          label: 'Home',     icon: '🏠', end: true },
+  { to: '/practice',  label: 'Cards',    icon: '🃏' },
+  { to: '/quiz',      label: 'Quiz',     icon: '🎮' },
+  { to: '/couples',   label: 'Together', icon: '🫶' },
+  { to: '/progress',  label: 'Me',       icon: '⭐' },
 ]
 
 export default function BottomNav() {
   return (
-    <nav className="bg-forest-600 border-t border-forest-700 px-2 py-1 safe-area-pb">
+    <nav className="bg-white border-t-2 border-gray-100 px-2 py-2">
       <div className="flex justify-around items-center">
-        {NAV_ITEMS.map((item) => (
+        {NAV.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-2 py-2 rounded-lg min-w-0 transition-all ${
-                isActive ? 'text-terracotta-400' : 'text-forest-300'
+              `flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl min-w-0 transition-all ${
+                isActive
+                  ? 'text-terracotta-500'
+                  : 'text-gray-400'
               }`
             }
           >
-            <span className="text-xl leading-none">{item.icon}</span>
-            <span className="text-[9px] font-medium leading-none">{item.label}</span>
+            {({ isActive }) => (
+              <>
+                <span
+                  className={`text-2xl leading-none transition-transform ${
+                    isActive ? 'scale-110' : ''
+                  }`}
+                >
+                  {item.icon}
+                </span>
+                <span
+                  className={`text-[10px] font-bold leading-none ${
+                    isActive ? 'text-terracotta-500' : 'text-gray-400'
+                  }`}
+                >
+                  {item.label}
+                </span>
+              </>
+            )}
           </NavLink>
         ))}
       </div>
