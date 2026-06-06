@@ -1,0 +1,161 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    /* Prevent bounce scroll on iOS */
+    overscroll-behavior: none;
+  }
+
+  body {
+    @apply bg-[#e8e0d5] text-ink;
+    min-height: 100dvh;
+    /* Phone-frame background */
+  }
+
+  h1, h2, h3 {
+    font-family: Georgia, Cambria, 'Times New Roman', serif;
+  }
+}
+
+@layer components {
+  /* Mobile phone frame */
+  .phone-frame {
+    @apply relative mx-auto bg-cream min-h-dvh;
+    max-width: 430px;
+    box-shadow: 0 0 60px rgba(0,0,0,0.18);
+  }
+
+  .textile-bg {
+    background-color: #fdf6e3;
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent 11px,
+        rgba(193, 68, 14, 0.055) 11px,
+        rgba(193, 68, 14, 0.055) 12px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        transparent 0px,
+        transparent 11px,
+        rgba(27, 67, 50, 0.04) 11px,
+        rgba(27, 67, 50, 0.04) 12px
+      );
+  }
+
+  .card-flip { perspective: 1000px; }
+  .card-flip-inner {
+    transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-style: preserve-3d;
+  }
+  .card-flip-inner.flipped { transform: rotateY(180deg); }
+  .card-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+  .card-back { transform: rotateY(180deg); }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #eca47e; border-radius: 2px; }
+}
+
+@layer utilities {
+  /* Correct answer bounce */
+  .animate-bounce-in {
+    animation: bounceIn 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  }
+
+  /* Wrong answer shake */
+  .animate-shake {
+    animation: shake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  }
+
+  /* Feedback panel slide up */
+  .animate-slide-up-fast {
+    animation: slideUpFast 0.25s ease-out;
+  }
+
+  /* Pop (for XP, stars) */
+  .animate-pop {
+    animation: pop 0.35s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+
+  /* Celebration star burst */
+  .animate-star {
+    animation: starBurst 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
+  }
+
+  /* Pulsing ring for current lesson */
+  .animate-pulse-ring {
+    animation: pulseRing 1.8s ease-in-out infinite;
+  }
+
+  /* Gentle float */
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.25s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+}
+
+@keyframes bounceIn {
+  0%   { transform: scale(0.85); opacity: 0.6; }
+  60%  { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  15%  { transform: translateX(-6px); }
+  30%  { transform: translateX(6px); }
+  45%  { transform: translateX(-6px); }
+  60%  { transform: translateX(6px); }
+  75%  { transform: translateX(-3px); }
+  90%  { transform: translateX(3px); }
+}
+
+@keyframes slideUpFast {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes pop {
+  0%   { transform: scale(0); opacity: 0; }
+  70%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@keyframes starBurst {
+  0%   { transform: scale(0) rotate(-20deg); opacity: 0; }
+  50%  { transform: scale(1.3) rotate(5deg);  opacity: 1; }
+  100% { transform: scale(1) rotate(0deg);    opacity: 1; }
+}
+
+@keyframes pulseRing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(193, 68, 14, 0.4); }
+  50%       { box-shadow: 0 0 0 12px rgba(193, 68, 14, 0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
