@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    @apply bg-cream text-ink;
+    min-height: 100dvh;
+  }
+
+  h1, h2, h3 {
+    font-family: Georgia, Cambria, 'Times New Roman', serif;
+  }
+}
+
+@layer components {
+  .textile-bg {
+    background-color: #fdf6e3;
+    background-image:
+      repeating-linear-gradient(
+        0deg,
+        transparent 0px,
+        transparent 11px,
+        rgba(193, 68, 14, 0.055) 11px,
+        rgba(193, 68, 14, 0.055) 12px
+      ),
+      repeating-linear-gradient(
+        90deg,
+        transparent 0px,
+        transparent 11px,
+        rgba(27, 67, 50, 0.04) 11px,
+        rgba(27, 67, 50, 0.04) 12px
+      );
+  }
+
+  .card-flip {
+    perspective: 1000px;
+  }
+
+  .card-flip-inner {
+    transition: transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-style: preserve-3d;
+  }
+
+  .card-flip-inner.flipped {
+    transform: rotateY(180deg);
+  }
+
+  .card-face {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .card-back {
+    transform: rotateY(180deg);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #fdf6e3;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #eca47e;
+    border-radius: 3px;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
